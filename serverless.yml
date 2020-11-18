@@ -1,47 +1,63 @@
 service: sls-api
 
 custom:
-  settings:
-    POSTS_TABLE: posts
+  tables:
+    USER_TABLE: "users-table-${self:provider.stage}"
+    POST_TABLE: "post-table-${self:provider.stage}"
 
 provider:
   name: aws
   runtime: nodejs12.x
-  environment: ${self:custom.settings}
+  stage: dev
   region: ap-southeast-1
   iamRoleStatements:
-    - Effect: "Allow"
+    - Effect: Allow
       Action:
-        - dynamodb:DescribeTable
+        - dynamodb:Query
         - dynamodb:Scan
         - dynamodb:GetItem
         - dynamodb:PutItem
         - dynamodb:UpdateItem
         - dynamodb:DeleteItem
       Resource:
-        - "arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.settings.POSTS_TABLE}"
+        - { "Fn::GetAtt": ["UsersDynamoDBTable", "Arn"] }
+        - { "Fn::GetAtt": ["PostDynamoDBTable", "Arn"] }
+  environment:
+    USERS_TABLE: ${self:custom.tables.USER_TABLE}
+    POST_TABLE: ${self:custom.tables.POST_TABLE}
 
 functions:
-  Hello:
-    handler: handler.hello
+  app:
+    handler: index.handler
     events:
-      - http:
-          path: hello
-          method: get
-          cors: true
+      - http: ANY /
+      - http: "ANY {proxy+}"
 
 resources:
   Resources:
-    PostsTable:
-      Type: AWS::DynamoDB::Table
+    UsersDynamoDBTable:
+      Type: "AWS::DynamoDB::Table"
       Properties:
         AttributeDefinitions:
-          - AttributeName: "id"
-            AttributeType: "S"
+          - AttributeName: userId
+            AttributeType: S
         KeySchema:
-          - AttributeName: "id"
-            KeyType: "HASH"
+          - AttributeName: userId
+            KeyType: HASH
         ProvisionedThroughput:
           ReadCapacityUnits: 1
           WriteCapacityUnits: 1
-        TableName: ${self:custom.settings.POSTS_TABLE}
+        TableName: ${self:custom.tables.USER_TABLE}
+    PostDynamoDBTable:
+      Type: "AWS::DynamoDB::Table"
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: post_id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: post_id
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+        TableName: ${self:custom.tables.POST_TABLE}
